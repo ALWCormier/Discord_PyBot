@@ -5,7 +5,7 @@ import urllib.request
 import json
 from discord.ext.commands import MissingRequiredArgument
 
-TOKEN = "NjIwMDYzOTkwNTI1MDY3MjY2.XZP_KQ.H7UJ9bBGaeoiM_pof3ybfEu7slY"
+TOKEN = "your_token_here"
 
 bot = commands.Bot(command_prefix=';')
 client = discord.Client()
