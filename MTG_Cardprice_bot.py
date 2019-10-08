@@ -5,7 +5,7 @@ import urllib.request
 import json
 from discord.ext.commands import MissingRequiredArgument
 
-TOKEN = "your_token_here"
+TOKEN = "NjIwMDYzOTkwNTI1MDY3MjY2.XZP_KQ.H7UJ9bBGaeoiM_pof3ybfEu7slY"
 
 bot = commands.Bot(command_prefix=';')
 client = discord.Client()
@@ -13,7 +13,10 @@ client = discord.Client()
 #makes BS object given url
 def url_opener(url):
     site = urllib.request.urlopen(url).read()
-    soup = bs.BeautifulSoup(site, 'lxml')
+    try:
+        soup = bs.BeautifulSoup(site, 'html.parser')
+    except:
+        print("bad soup")
     return soup
 
 def name_set_format(array):
@@ -121,21 +124,22 @@ async def card(ctx, *, args):
     f_links = data[1]
     f_images = data[2]
     user_input = data[4].replace(",","")
+    user_input = user_input.replace("'", "")
     a = 0 #adjust for undesirable results
     i = 0 #an index ofc
 
     #checks if real card
     if data[3] == "False":
 
+        # circumvents MTGGOLDFISH's obnoxious alphabetized results
+        while (name_set[i][1][0:len(user_input)]).lower() != user_input:
+            a += 1
+            i += 1
+
         # checks for dummy sets and adjust past them
         while name_set[i][0][0:8] == "Vanguard" or name_set[i][0][0:8] == "Duels of":
             a += 1
             i += 1
-
-        # circumvents MTGGOLDFISH's obnoxious alphabetized results
-        while (name_set[i][1][0:len(user_input)]).lower() != user_input:
-            a+= 1
-            i+= 1
 
         #get price page from url (modified to skip undesirable results)
         soup = url_opener(f_links[0+a])
@@ -267,9 +271,9 @@ async def cut(ctx, *, args):
 
 # displays deck for mentioned user
 @bot.command()
-async def decks(ctx, args = None):
+async def decks(ctx, mention : discord.Member):
 
-    mention = str(args)[2:-1]
+    mention = str(mention.id)
     all_decks = {}
     has_decks = False
     embed = discord.Embed(title="Decks:", color=0x00ffff)
@@ -294,11 +298,11 @@ async def decks(ctx, args = None):
 @bot.command()
 async def commands(ctx):
     embed = discord.Embed(title="Commands:", color=0x00ffff)
-    embed.add_field(name=";card cardname", value="Print card image and price", inline=False)
-    embed.add_field(name=";price cardname", value="Prints list of prices for card", inline=False)
-    embed.add_field(name=";add decktitle decklist_link", value="Adds decklist to your file (use '_' instead of spaces or your deck will be fucked)", inline=False)
+    embed.add_field(name=";card cardname", value="Display card image and price", inline=False)
+    embed.add_field(name=";price cardname", value="Lists prices for card", inline=False)
+    embed.add_field(name=";add deck_title link", value="Adds decklist to your file (use '_' instead of spaces or your entry will be ruined)", inline=False)
     embed.add_field(name=";cut #", value="Removes deck number # from your list", inline=False)
-    embed.add_field(name=";decks @mention", value="Print mentioned user's decks", inline=False)
+    embed.add_field(name=";decks @mention", value="Lists mentioned user's decks on file", inline=False)
 
     await ctx.send(embed=embed)
 
