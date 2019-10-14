@@ -5,7 +5,7 @@ import urllib.request
 import json
 from discord.ext.commands import MissingRequiredArgument
 
-TOKEN = "your_token_here"
+TOKEN = "NjIwMDYzOTkwNTI1MDY3MjY2.XaS20w.RQ7PxIMhsYSWURUEwA6N8chPDIo"
 
 bot = commands.Bot(command_prefix=';')
 client = discord.Client()
@@ -132,7 +132,7 @@ async def card(ctx, *, args):
     if data[3] == "False":
 
         # circumvents MTGGOLDFISH's obnoxious alphabetized results
-        while (name_set[i][1][0:len(user_input)]).lower() != user_input:
+        while (name_set[i][1][0:len(user_input)]).lower() != user_input.lower():
             a += 1
             i += 1
 
@@ -177,14 +177,23 @@ async def price(ctx, *, args):
     f_links = data[1]
     a = 0
     i = 0
+    count = 0
 
     if data[3] == "False":
 
-        embed = discord.Embed(title=name_set[0+a][1], color=0x00ffff)
+        # makes sure title is not avatar
+        while name_set[i][0][0:8] == "Vanguard" or name_set[i][0][0:8] == "Duels of":
+            a += 1
+            i += 1
+            print("Looping")
 
+        embed = discord.Embed(title=name_set[0+a][1], color=0x00ffff)
+        print(name_set[0+a][1])
+
+        i = 0
         for item in f_links:
-            #make sure there are only 8 results for time's sake
-            if i > 9:
+            #make sure there are only 10 results for time's sake
+            if count > 9:
                 break
             #prioritizes literal
             # elif name_set[i][1][0:len(data[4])].lower() != data[4]:
@@ -196,14 +205,15 @@ async def price(ctx, *, args):
             price_page = soup2.find_all("div", {"class": "price-box paper"})
 
         #get the price from html string
-            try:
-                f_price = str(price_page[0])
-                f_price = f_price[99:-13]
-                f_price = '$' + f_price
-                embed.add_field(name=name_set[i][1] + " | " + name_set[i][0], value="Price: " + f_price, inline=False)
-
-            except:
-                print("No Paper Price")
+            if name_set[i][0] != "Sealed Product":
+                try:
+                    f_price = str(price_page[0])
+                    f_price = f_price[99:-13]
+                    f_price = '$' + f_price
+                    embed.add_field(name=name_set[i][1] + " | " + name_set[i][0], value="Price: " + f_price, inline=False)
+                    count += 1
+                except:
+                    print("No Paper Price")
 
             i += 1
 
