@@ -8,7 +8,7 @@ import cv2
 import os
 from discord.ext.commands import MissingRequiredArgument
 
-TOKEN = your_token_here
+TOKEN = "your_token_here"
 
 bot = commands.Bot(command_prefix="'")
 client = discord.Client()
@@ -32,43 +32,62 @@ def nat_dex_number(name):
                 dex_number = dex_data[entry]
     return dex_number
 
+#check if pokemon is in the gen8 dex
+def gen_8_dex(poke_name):
+    exists = False
+
+    with open("galan_dex_names.json", 'r') as gen8_dex:
+        dex = json.load(gen8_dex)
+        for name in dex:
+            if name.lower() == poke_name:
+                exists = True
+                break
+
+    return exists
+
 
 #next evolution name from dex number and json file
-def next_evolution_name(dex_number, family):
+def next_evolution_name(dex_number, poke_name, family):
     i=0
     nex_dex = ' '
     mega=False
     for item in family:
-        if item[-9:-6] == dex_number:
+        if item[-9:-6] == dex_number or item[-len(poke_name):] == poke_name:
             try:
                 next_ev = family[i+1]
                 if next_ev[-5:] == "#mega":
                     mega = True
                     nex_dex = dex_number
                 else:
-                    nex_dex = family[i+1][-9:-6]
+                    if item[-len(poke_name):] == poke_name:
+                        temp = (family[i+1].split("/"))
+                        nex_dex = temp[-1]
+                    else:
+                        nex_dex = family[i+1][-9:-6]
             except:
                 return " "
         i += 1
     if nex_dex == ' ':
         return " "
+    if len(nex_dex) == 3:
+        with open("pokedata.json", 'r') as database:
+            dex_data = json.load(database)
+            for key in dex_data:
+                if dex_data[key] == nex_dex:
+                    if mega:
+                        return "Mega "+key.title()
+                    else:
+                        return key.title()
+    else:
+        return nex_dex.title()
 
-    with open("pokedata.json", 'r') as database:
-        dex_data = json.load(database)
-        for key in dex_data:
-            if dex_data[key] == nex_dex:
-                if mega:
-                    return "Mega "+key.title()
-                else:
-                    return key.title()
 
-
-def concat_img(type_list):
+def concat_img(type_list, axis):
     i = 1
     img = cv2.imread("type_images/" + type_list[0] + ".png")
     while i < len(type_list):
         temp = cv2.imread("type_images/" + type_list[i] + ".png")
-        img = np.concatenate((img, temp), axis=1)
+        img = np.concatenate((img, temp), axis=axis)
         i += 1
     cv2.imwrite('out.png', img)
     file = discord.File('out.png')
@@ -82,17 +101,33 @@ def delete_file(file):
         print(e)
 
 
-def serebii_scrape(dex_number, gen):
+def serebii_scrape(dex_number, poke_name, gen):
     #dictionary with standard gen numbers to serebii gen prefixes
-    gen_acros = {"1":"/", "2":"-gs/", "3":"-rs/", "4":"-dp/", "5":"-bw/", "6":"-xy/", "7":"-sm/"}
-    url = "https://www.serebii.net/pokedex"+gen_acros[gen]+dex_number+".shtml"
+    gen_acros = {"1":"/", "2":"-gs/", "3":"-rs/", "4":"-dp/", "5":"-bw/", "6":"-xy/", "7":"-sm/", "8":"-swsh/"}
     link_prefix = "https://www.serebii.net"
+
+    #initialize some return variables
     evo_images = []
     abilities = []
-    soup = url_opener(url)
-    #open url as soup, get regular poke sprite
-    #data getting process differs depending on game gen
-    if int(gen) > 5:
+    evo_method = 0
+    real = False
+
+    # if gen 8 compare poke name w/ new nat dex
+    if int(gen) == 8:
+        url = link_prefix + "/pokedex" + gen_acros[gen] + poke_name + "/"
+        real = True
+        # use beautiful soup to get a html parsed page
+        soup = url_opener(url)
+    else:
+        url = "https://www.serebii.net/pokedex" + gen_acros[gen] + dex_number + ".shtml"
+        # use beautiful soup to get a html parsed page
+        soup = url_opener(url)
+
+
+    # open url as soup, get regular poke sprite
+    # data getting process differs depending on game gen
+
+    if (int(gen) > 5) or real:
         #get the image link for the sprite embed
         sprite_link = soup.find("img", {"alt": "Normal Sprite"})
         sprite_link = str(sprite_link.get('src'))
@@ -108,7 +143,7 @@ def serebii_scrape(dex_number, gen):
             types[i] = types[i][-1]
             types[i] = types[i][:-4]
             i += 1
-        type_file = concat_img(types)
+        type_file = concat_img(types, 0)
 
         #get all the images in the evolution chain section
         chain = soup.find_all("table", {"class": "evochain"})
@@ -119,11 +154,12 @@ def serebii_scrape(dex_number, gen):
         chain = temp_string.split('"')
         for item in chain:
             if item[:8] == "/pokedex":
-                if item[12:19] == "evoicon":
+                if item[8+len(gen_acros[gen]):15+len(gen_acros[gen])] == "evoicon":
                     evo_images.append(link_prefix + item)
                 else:
                     evo_images.append(link_prefix+item)
                     ####    for next evolution
+                    print(item)
                     family.append(item)
 
             elif item[:7] == "evoicon":
@@ -132,12 +168,22 @@ def serebii_scrape(dex_number, gen):
         #if the url has the pokedex number of the current pokemon, get the level it evolves
         i = 0
         for item in evo_images:
-            if item[-9:-6] == str(dex_number):
-                try:
-                    thumbnail_image = evo_images[i+1]
-                    break
-                except:
-                    thumbnail_image = 0
+            if gen == "8":
+                if item[-len(poke_name):]:
+                    try:
+                        evo_method = evo_images[i+1]
+                        break
+                    except:
+                        evo_method = 0
+
+            else:
+                if item[-9:-6] == str(dex_number):
+                    try:
+                        evo_method = evo_images[i+1]
+                        break
+                    except:
+                        evo_method = 0
+
             i += 1
 
         #get ability text
@@ -148,10 +194,9 @@ def serebii_scrape(dex_number, gen):
                     abilities.append(item.parent.parent.get_text())
         abilities = str(abilities[-1])
 
-        n_evo_name = next_evolution_name(dex_number, family)
+        n_evo_name = next_evolution_name(dex_number, poke_name, family)
 
-
-        return sprite_link, type_file, thumbnail_image, url, abilities, n_evo_name
+        return sprite_link, type_file, evo_method, url, abilities, n_evo_name
 
     else:
         link_number = 0
@@ -181,6 +226,7 @@ async def on_ready():
 @bot.command()
 async def poke(ctx, *, args):
     arg_data = (args.lower()).split(" ")
+    print(arg_data)
 
     #checks for pokemon with two word names, checks for specified gen, defaults to gen7
     if arg_data[0] == "mr." or arg_data[0] == "type:" or arg_data[0] == "mime":
@@ -188,19 +234,21 @@ async def poke(ctx, *, args):
         try:
             gen = arg_data[2]
         except:
-            gen = "7"
+            gen = "8"
     else:
         poke_name = arg_data[0]
         try:
             gen = arg_data[1]
+            print(gen)
         except:
-            gen = "7"
+            gen = "8"
 
     dex_number = nat_dex_number(poke_name)
 
     #if
-    if dex_number != "":
-        poke_data = serebii_scrape(dex_number, gen)
+    if (dex_number != "") or gen_8_dex(poke_name):
+        #scrapes serebii page, returns a list including: sprite_link, type_file, evo_method, url, abilities, n_evo_name
+        poke_data = serebii_scrape(dex_number, poke_name, gen)
 
         #allows type images to be used in embed through discord attachment link
         await ctx.send(file=poke_data[1])
@@ -208,13 +256,12 @@ async def poke(ctx, *, args):
         message = (str(message[0].attachments).split("'"))[3]
 
         #creates embed and fields
-        embed = discord.Embed(title=poke_name.title(), color=0x00ffff).set_thumbnail(url=poke_data[0]).set_author(name='Type', icon_url=message)
-        if poke_data[2] != 0:
-            embed.set_image(url=poke_data[2])
+        embed = discord.Embed(title=poke_name.title(), color=0x00ffff).set_thumbnail(url=poke_data[2]).set_author(name='Type', icon_url=message)
+        if poke_data[0] != " ":
+            embed.set_image(url=poke_data[0])
         embed.add_field(name="Abilties", value=poke_data[4])
         embed.add_field(name="Link: ", value=poke_data[3])
-        print(poke_data[5])
-        embed.add_field(name="Next Evolution: "+poke_data[5], value ="Method:")
+        embed.add_field(name="Evolution Method:", value ="Next Evolution: "+poke_data[5])
         await ctx.send(embed=embed)
         embed2 = discord.Embed(title="Types:", color=0x00ffff)
         await ctx.send(embed=embed2, attachments=poke_data[1])
@@ -269,7 +316,7 @@ async def t(ctx, *, args):
     #gets type icons and adds them together to display
     if len(super_effective) != 0:
         #creates temporary file for display
-        file = concat_img(super_effective)
+        file = concat_img(super_effective, 1)
 
         embed = discord.Embed(title=element.title() + sf_display_text, color=0x00ffff)
         await ctx.send(embed=embed)
@@ -282,7 +329,7 @@ async def t(ctx, *, args):
 
     if len(nv_effective) != 0:
         #creates temporary file for display
-        file = concat_img(nv_effective)
+        file = concat_img(nv_effective, 1)
 
         embed = discord.Embed(title=element.title() + nv_display_text, color=0x00ffff)
         await ctx.send(embed=embed)
@@ -293,7 +340,7 @@ async def t(ctx, *, args):
 
     if len(no_effect) != 0:
         # creates temporary file for display
-        file = concat_img(no_effect)
+        file = concat_img(no_effect, 1)
 
         embed = discord.Embed(title=element.title() + nf_display_text, color=0x00ffff)
         await ctx.send(embed=embed)
