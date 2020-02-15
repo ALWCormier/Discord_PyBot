@@ -5,12 +5,13 @@ import urllib.request
 import json
 from discord.ext.commands import MissingRequiredArgument
 
-TOKEN = your_token_here
+TOKEN = "your_token_here"
 
-bot = commands.Bot(command_prefix=';')
+bot = commands.Bot(command_prefix=";")
 client = discord.Client()
 
-#makes BS object given url
+
+# makes BS object given url
 def url_opener(url):
     site = urllib.request.urlopen(url).read()
     try:
@@ -19,6 +20,7 @@ def url_opener(url):
         print("bad soup")
     return soup
 
+
 def name_set_format(array):
     for item in array:
         del item[0:2]
@@ -26,6 +28,7 @@ def name_set_format(array):
         for string in item:
             item[i] = string.replace("+", " ")
             i += 1
+
 
 def mtggoldfish_scrape(card_name):
     address1 = "https://www.mtggoldfish.com/q?utf8=?&query_string="
@@ -43,16 +46,16 @@ def mtggoldfish_scrape(card_name):
     link_prefix = "https://www.mtggoldfish.com"
     name_set = []
 
-    #get current page
+    # get current page
     webp_check = soup.find_all('meta', {"property": "og:url"})
     webp_check = str(webp_check)
     current_page = webp_check[16:-22]
     webp_check = webp_check[44:49]
 
-
     # checks for single card redirect
     if webp_check == 'price':
-        #gets image from that page
+
+        # gets image from that page
         image = (soup.find_all('img')[6]['src'])
         f_images.append(image)
         name_set.append(current_page[27:].split('/'))
@@ -62,7 +65,8 @@ def mtggoldfish_scrape(card_name):
         try:
             name_set_format(name_set)
             setid = len(name_set[0][0])
-            #add and altered link to foil version to links to be passed
+
+            # add and altered link to foil version to links to be passed
             f_links.append(current_page[:34+setid]+':Foil'+current_page[34+setid:])
             name_set.append([name_set[0][0]+':Foil', name_set[0][1]])
         except:
@@ -94,11 +98,23 @@ def mtggoldfish_scrape(card_name):
 
     return name_set, f_links, f_images, not_card, name
 
-#prevents bot from reading its own messages
+
+def price_getter(soup):
+    spans = soup.find_all("div", {"class": "btn-shop-label"})
+    i = 0
+    for item in spans:
+        if item.text[2:-1] == "TCGplayer Market Price":
+            price = str(item.find_next_siblings())
+            break
+        else:
+            price = "--"
+    return price[33:-42]
+
 # @bot.event
 # async def on_message(ctx):
-#     if ctx.author != client.user:
-#         await ctx.send(ctx.channel, ctx.content[::-1])
+#     print(ctx.author.id)
+#     if str(ctx.author.id) == 240537940378386442:
+#         return
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -137,24 +153,12 @@ async def card(ctx, *, args):
             i += 1
 
         # checks for dummy sets and adjust past them
-        while name_set[i][0][0:8] == "Vanguard" or name_set[i][0][0:8] == "Duels of":
-            a += 1
-            i += 1
 
-        #get price page from url (modified to skip undesirable results)
+        #get price page from url
         soup = url_opener(f_links[0+a])
 
-        #find the tag for the price box we want
-        price_page = soup.find_all("div", {"class": "price-box paper"})
-
-        #format correctly
-        try:
-            f_price = str(price_page[0])
-            f_price = f_price[99:-13]
-            f_price = '$'+f_price
-
-        except:
-            f_price = "No Paper Price"
+        #get scrape tcg market price from page
+        f_price = price_getter(soup)
 
         f_images.append(soup.find_all("img", {"class": "price-card-image-image"}))
         image = str(f_images[0+a])
@@ -162,7 +166,7 @@ async def card(ctx, *, args):
     #start output with embed
         embed = discord.Embed(title=name_set[0+a][1], color=0x00ffff)
         embed.set_image(url=image)
-        embed.add_field(name=name_set[0+a][0], value="Price: " + f_price, inline=False)
+        embed.add_field(name=name_set[0+a][0], value="TCG Market Price: " + f_price, inline=False)
         await ctx.send(embed=embed)
     else:
         await ctx.send(f"Not a card {ctx.author.mention}")
@@ -182,41 +186,32 @@ async def price(ctx, *, args):
     if data[3] == "False":
 
         # makes sure title is not avatar
-        while name_set[i][0][0:8] == "Vanguard" or name_set[i][0][0:8] == "Duels of":
+        # print(name_set[i][0][0:8])
+        while name_set[i][0][0:8] == "Vanguard" or name_set[i][0][0:8] == "Duels of" or name_set[i][0][0:8] == "Promotio":
             a += 1
             i += 1
-            print("Looping")
 
         embed = discord.Embed(title=name_set[0+a][1], color=0x00ffff)
-        print(name_set[0+a][1])
+        # print(name_set[0+a][1])
 
         i = 0
         for item in f_links:
             #make sure there are only 10 results for time's sake
             if count > 9:
                 break
-            #prioritizes literal
-            # elif name_set[i][1][0:len(data[4])].lower() != data[4]:
 
+            try:
+                soup2 = url_opener(item)
+                f_price = price_getter(soup2)
+            except:
+                print("something broke")
 
-            soup2 = url_opener(item)
+            if f_price[-3:] != "tix" and f_price != "":
+                embed.add_field(name=name_set[i][1] + " | " + name_set[i][0], value="Price: " + f_price, inline=False)
+                count += 1
 
-        #find the tag for the box we want
-            price_page = soup2.find_all("div", {"class": "price-box paper"})
-
-        #get the price from html string
-            if name_set[i][0] != "Sealed Product":
-                try:
-                    f_price = str(price_page[0])
-                    f_price = f_price[99:-13]
-                    f_price = '$' + f_price
-                    embed.add_field(name=name_set[i][1] + " | " + name_set[i][0], value="Price: " + f_price, inline=False)
-                    count += 1
-                except:
-                    print("No Paper Price")
-
-            i += 1
-
+            i+= 1
+        print("here")
         await ctx.send(embed=embed)
     else:
         await ctx.send(f"Not a card {ctx.author.mention}")
